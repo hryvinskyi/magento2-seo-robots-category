@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2025. All rights reserved.
+  ~ @author: Volodymyr Hryvinskyi <mailto:volodymyr@hryvinskyi.com>
+  -->
+
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <preference for="Hryvinskyi\SeoRobotsCategoryApi\Api\ConfigInterface"
+                type="Hryvinskyi\SeoRobotsCategory\Model\Config"/>
+    <preference for="Hryvinskyi\SeoRobotsCategoryApi\Api\CategoryRobotsResolverInterface"
+                type="Hryvinskyi\SeoRobotsCategory\Model\CategoryRobotsResolver"/>
+    <preference for="Hryvinskyi\SeoRobotsCategoryApi\Api\CategoryRobotsRepositoryInterface"
+                type="Hryvinskyi\SeoRobotsCategory\Model\ResourceModel\CategoryRobotsRepository"/>
+    <preference for="Hryvinskyi\SeoRobotsCategoryApi\Api\GetCategoryRobotsInterface"
+                type="Hryvinskyi\SeoRobotsCategory\Model\GetCategoryRobots"/>
+</config>
