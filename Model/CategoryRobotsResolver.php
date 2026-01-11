@@ -10,6 +10,7 @@ namespace Hryvinskyi\SeoRobotsCategory\Model;
 
 use Hryvinskyi\SeoRobotsCategoryApi\Api\CategoryRobotsResolverInterface;
 use Hryvinskyi\SeoRobotsCategoryApi\Api\ConfigInterface;
+use Hryvinskyi\SeoRobotsApi\Api\RobotsListInterface;
 use Magento\Catalog\Model\Category;
 
 /**
@@ -19,6 +20,7 @@ class CategoryRobotsResolver implements CategoryRobotsResolverInterface
 {
     /**
      * @inheritDoc
+     * @deprecated Use getCategoryRobotsDirectives() instead
      */
     public function getCategoryRobotsCode(Category $category): ?int
     {
@@ -34,6 +36,20 @@ class CategoryRobotsResolver implements CategoryRobotsResolverInterface
     /**
      * @inheritDoc
      */
+    public function getCategoryRobotsDirectives(Category $category): array
+    {
+        $value = $category->getData(ConfigInterface::CATEGORY_ATTRIBUTE_CODE);
+
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        return $this->parseDirectivesFromValue($value);
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function shouldApplyRobotsToProducts(Category $category): bool
     {
         $value = $category->getData(ConfigInterface::APPLY_ROBOTS_TO_PRODUCTS_ATTRIBUTE_CODE);
@@ -42,6 +58,7 @@ class CategoryRobotsResolver implements CategoryRobotsResolverInterface
 
     /**
      * @inheritDoc
+     * @deprecated Use getProductRobotsDirectives() instead
      */
     public function getProductRobotsCode(Category $category): ?int
     {
@@ -57,5 +74,85 @@ class CategoryRobotsResolver implements CategoryRobotsResolverInterface
         }
 
         return (int)$value;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getProductRobotsDirectives(Category $category): array
+    {
+        $value = $category->getData(ConfigInterface::PRODUCT_ROBOTS_ATTRIBUTE_CODE);
+
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        // If set to USE_CATEGORY_ROBOTS, return the category's robots directives
+        if ($value === (string)ConfigInterface::USE_CATEGORY_ROBOTS) {
+            return $this->getCategoryRobotsDirectives($category);
+        }
+
+        return $this->parseDirectivesFromValue($value);
+    }
+
+    /**
+     * Parse directives from attribute value (JSON string or legacy integer code)
+     *
+     * @param mixed $value
+     * @return array
+     */
+    private function parseDirectivesFromValue($value): array
+    {
+        // Handle JSON directive array (new format)
+        if (is_string($value) && $this->isJson($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        // Handle legacy integer codes (backward compatibility)
+        if (is_numeric($value)) {
+            return $this->convertCodeToDirectives((int)$value);
+        }
+
+        // Handle already parsed array
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return [];
+    }
+
+    /**
+     * Convert legacy integer code to directive array
+     *
+     * @param int $code
+     * @return array
+     */
+    private function convertCodeToDirectives(int $code): array
+    {
+        $map = [
+            RobotsListInterface::NOINDEX_NOFOLLOW => ['noindex', 'nofollow'],
+            RobotsListInterface::NOINDEX_FOLLOW => ['noindex', 'follow'],
+            RobotsListInterface::INDEX_NOFOLLOW => ['index', 'nofollow'],
+            RobotsListInterface::INDEX_FOLLOW => ['index', 'follow'],
+            RobotsListInterface::NOINDEX_NOFOLLOW_NOARCHIVE => ['noindex', 'nofollow', 'noarchive'],
+            RobotsListInterface::NOINDEX_FOLLOW_NOARCHIVE => ['noindex', 'follow', 'noarchive'],
+            RobotsListInterface::INDEX_NOFOLLOW_NOARCHIVE => ['index', 'nofollow', 'noarchive'],
+            RobotsListInterface::INDEX_FOLLOW_NOARCHIVE => ['index', 'follow', 'noarchive'],
+        ];
+
+        return $map[$code] ?? [];
+    }
+
+    /**
+     * Check if string is valid JSON
+     *
+     * @param string $string
+     * @return bool
+     */
+    private function isJson(string $string): bool
+    {
+        json_decode($string);
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }

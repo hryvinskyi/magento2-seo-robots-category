@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright (c) 2025. All rights reserved.
+ * Copyright (c) 2026. All rights reserved.
  * @author: Volodymyr Hryvinskyi <mailto:volodymyr@hryvinskyi.com>
  */
 
@@ -19,50 +19,13 @@ use Magento\Store\Model\StoreManagerInterface;
 
 class GetCategoryRobots implements GetCategoryRobotsInterface
 {
-    /**
-     * @var ConfigInterface
-     */
-    private $config;
-
-    /**
-     * @var RobotsListInterface
-     */
-    private $robotsList;
-
-    /**
-     * @var CategoryRobotsResolverInterface
-     */
-    private $categoryRobotsResolver;
-
-    /**
-     * @var CategoryRobotsRepositoryInterface
-     */
-    private $categoryRobotsRepository;
-
-    /**
-     * @var StoreManagerInterface
-     */
-    private $storeManager;
-
-    /**
-     * @param ConfigInterface $config
-     * @param RobotsListInterface $robotsList
-     * @param CategoryRobotsResolverInterface $categoryRobotsResolver
-     * @param CategoryRobotsRepositoryInterface $categoryRobotsRepository
-     * @param StoreManagerInterface $storeManager
-     */
     public function __construct(
-        ConfigInterface $config,
-        RobotsListInterface $robotsList,
-        CategoryRobotsResolverInterface $categoryRobotsResolver,
-        CategoryRobotsRepositoryInterface $categoryRobotsRepository,
-        StoreManagerInterface $storeManager
+        private readonly ConfigInterface $config,
+        private readonly RobotsListInterface $robotsList,
+        private readonly CategoryRobotsResolverInterface $categoryRobotsResolver,
+        private readonly CategoryRobotsRepositoryInterface $categoryRobotsRepository,
+        private readonly StoreManagerInterface $storeManager
     ) {
-        $this->config = $config;
-        $this->robotsList = $robotsList;
-        $this->categoryRobotsResolver = $categoryRobotsResolver;
-        $this->categoryRobotsRepository = $categoryRobotsRepository;
-        $this->storeManager = $storeManager;
     }
 
     /**
@@ -74,13 +37,13 @@ class GetCategoryRobots implements GetCategoryRobotsInterface
             return null;
         }
 
-        $robotsCode = $this->categoryRobotsResolver->getCategoryRobotsCode($category);
+        $directives = $this->categoryRobotsResolver->getCategoryRobotsDirectives($category);
 
-        if ($robotsCode === null) {
+        if (empty($directives)) {
             return null;
         }
 
-        return $this->robotsList->getMetaRobotsByCode($robotsCode);
+        return $this->robotsList->buildMetaRobotsFromDirectives($directives);
     }
 
     /**
@@ -112,40 +75,101 @@ class GetCategoryRobots implements GetCategoryRobotsInterface
         }
 
         // Check each category for product robots settings
-        // Priority: NOINDEX settings take precedence
-        $robotsCode = null;
+        // Priority: NOINDEX directives take precedence
+        $finalDirectives = null;
 
         foreach ($categoriesData as $categoryData) {
-            $productRobotsCode = $categoryData['product_robots_meta_tag'];
+            $productRobotsValue = $categoryData['product_robots_meta_tag'];
 
             // Handle "Use Category Robots" option
-            if ((int)$productRobotsCode === ConfigInterface::USE_CATEGORY_ROBOTS) {
-                $productRobotsCode = $categoryData['robots_meta_tag'];
+            if ($productRobotsValue === (string)ConfigInterface::USE_CATEGORY_ROBOTS) {
+                $productRobotsValue = $categoryData['robots_meta_tag'];
             }
 
             // Skip if null or use default
-            if ($productRobotsCode === null || (int)$productRobotsCode === ConfigInterface::USE_DEFAULT) {
+            if ($productRobotsValue === null || $productRobotsValue === '') {
                 continue;
             }
 
-            $productRobotsCode = (int)$productRobotsCode;
+            // Parse directives from JSON
+            $directives = $this->parseDirectivesFromValue($productRobotsValue);
 
-            // If we found a NOINDEX setting, use it immediately (highest priority)
-            if (in_array($productRobotsCode, [
-                RobotsListInterface::NOINDEX_NOFOLLOW,
-                RobotsListInterface::NOINDEX_FOLLOW,
-                RobotsListInterface::NOINDEX_NOFOLLOW_NOARCHIVE,
-                RobotsListInterface::NOINDEX_FOLLOW_NOARCHIVE
-            ])) {
-                return $this->robotsList->getMetaRobotsByCode($productRobotsCode);
+            if (empty($directives)) {
+                continue;
             }
 
-            // Store the first robots code we find
-            if ($robotsCode === null) {
-                $robotsCode = $productRobotsCode;
+            // If we found NOINDEX directive, use it immediately (highest priority)
+            if (in_array('noindex', $directives)) {
+                return $this->robotsList->buildMetaRobotsFromDirectives($directives);
+            }
+
+            // Store the first non-NOINDEX directives we find
+            if ($finalDirectives === null) {
+                $finalDirectives = $directives;
             }
         }
 
-        return $robotsCode !== null ? $this->robotsList->getMetaRobotsByCode($robotsCode) : null;
+        return $finalDirectives !== null ? $this->robotsList->buildMetaRobotsFromDirectives($finalDirectives) : null;
+    }
+
+    /**
+     * Parse directives from attribute value (JSON string or legacy integer code)
+     *
+     * @param mixed $value
+     * @return array
+     */
+    private function parseDirectivesFromValue($value): array
+    {
+        // Handle JSON directive array (new format)
+        if (is_string($value) && $this->isJson($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        // Handle legacy integer codes (backward compatibility)
+        if (is_numeric($value)) {
+            return $this->convertCodeToDirectives((int)$value);
+        }
+
+        // Handle already parsed array
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return [];
+    }
+
+    /**
+     * Convert legacy integer code to directive array
+     *
+     * @param int $code
+     * @return array
+     */
+    private function convertCodeToDirectives(int $code): array
+    {
+        $map = [
+            RobotsListInterface::NOINDEX_NOFOLLOW => ['noindex', 'nofollow'],
+            RobotsListInterface::NOINDEX_FOLLOW => ['noindex', 'follow'],
+            RobotsListInterface::INDEX_NOFOLLOW => ['index', 'nofollow'],
+            RobotsListInterface::INDEX_FOLLOW => ['index', 'follow'],
+            RobotsListInterface::NOINDEX_NOFOLLOW_NOARCHIVE => ['noindex', 'nofollow', 'noarchive'],
+            RobotsListInterface::NOINDEX_FOLLOW_NOARCHIVE => ['noindex', 'follow', 'noarchive'],
+            RobotsListInterface::INDEX_NOFOLLOW_NOARCHIVE => ['index', 'nofollow', 'noarchive'],
+            RobotsListInterface::INDEX_FOLLOW_NOARCHIVE => ['index', 'follow', 'noarchive'],
+        ];
+
+        return $map[$code] ?? ['index', 'follow'];
+    }
+
+    /**
+     * Check if string is valid JSON
+     *
+     * @param string $string
+     * @return bool
+     */
+    private function isJson(string $string): bool
+    {
+        json_decode($string);
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }
