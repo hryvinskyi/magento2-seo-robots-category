@@ -155,4 +155,85 @@ class CategoryRobotsResolver implements CategoryRobotsResolverInterface
         json_decode($string);
         return json_last_error() === JSON_ERROR_NONE;
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function getCategoryXRobotsDirectives(Category $category): array
+    {
+        // If using meta robots for X-Robots, return empty to signal fallback
+        if ($this->shouldUseMetaForXRobots($category)) {
+            return [];
+        }
+
+        $value = $category->getData(ConfigInterface::X_ROBOTS_HEADER_ATTRIBUTE_CODE);
+
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        return $this->parseDirectivesFromValue($value);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function shouldUseMetaForXRobots(Category $category): bool
+    {
+        $value = $category->getData(ConfigInterface::USE_META_FOR_X_ROBOTS_ATTRIBUTE_CODE);
+        // Default is true (1) when not set
+        return $value === null || $value === '' || (bool)$value;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function shouldApplyXRobotsToProducts(Category $category): bool
+    {
+        $value = $category->getData(ConfigInterface::APPLY_X_ROBOTS_TO_PRODUCTS_ATTRIBUTE_CODE);
+        return (bool)$value;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getProductXRobotsDirectives(Category $category): array
+    {
+        // If using category X-Robots for products, return category's X-Robots directives
+        if ($this->shouldUseCategoryXRobotsForProducts($category)) {
+            // If category uses meta for X-Robots, return category's meta robots
+            if ($this->shouldUseMetaForXRobots($category)) {
+                return $this->getCategoryRobotsDirectives($category);
+            }
+            return $this->getCategoryXRobotsDirectives($category);
+        }
+
+        $value = $category->getData(ConfigInterface::PRODUCT_X_ROBOTS_HEADER_ATTRIBUTE_CODE);
+
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        return $this->parseDirectivesFromValue($value);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function shouldUseCategoryXRobotsForProducts(Category $category): bool
+    {
+        $value = $category->getData(ConfigInterface::USE_CATEGORY_X_ROBOTS_FOR_PRODUCTS_ATTRIBUTE_CODE);
+        // Default is true (1) when not set
+        return $value === null || $value === '' || (bool)$value;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function shouldUseCategoryRobotsForProducts(Category $category): bool
+    {
+        $value = $category->getData(ConfigInterface::USE_CATEGORY_ROBOTS_FOR_PRODUCTS_ATTRIBUTE_CODE);
+        // Default is true (1) when not set
+        return $value === null || $value === '' || (bool)$value;
+    }
 }

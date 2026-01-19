@@ -79,11 +79,21 @@ class GetCategoryRobots implements GetCategoryRobotsInterface
         $finalDirectives = null;
 
         foreach ($categoriesData as $categoryData) {
-            $productRobotsValue = $categoryData['product_robots_meta_tag'];
+            $useCategoryRobotsForProducts = $categoryData['use_category_robots_for_products'];
+            // Default is true (1) when not set
+            $useCategoryRobotsForProducts = $useCategoryRobotsForProducts === null ? 1 : (int)$useCategoryRobotsForProducts;
 
-            // Handle "Use Category Robots" option
-            if ($productRobotsValue === (string)ConfigInterface::USE_CATEGORY_ROBOTS) {
+            if ($useCategoryRobotsForProducts) {
+                // Use category's meta robots directives for products
                 $productRobotsValue = $categoryData['robots_meta_tag'];
+            } else {
+                // Use explicit product robots directives
+                $productRobotsValue = $categoryData['product_robots_meta_tag'];
+
+                // Handle "Use Category Robots" option (legacy support)
+                if ($productRobotsValue === (string)ConfigInterface::USE_CATEGORY_ROBOTS) {
+                    $productRobotsValue = $categoryData['robots_meta_tag'];
+                }
             }
 
             // Skip if null or use default
@@ -171,5 +181,91 @@ class GetCategoryRobots implements GetCategoryRobotsInterface
     {
         json_decode($string);
         return json_last_error() === JSON_ERROR_NONE;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function executeXRobots(Category $category): array
+    {
+        if (!$this->config->isEnabled()) {
+            return [];
+        }
+
+        return $this->categoryRobotsResolver->getCategoryXRobotsDirectives($category);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function executeXRobotsForProduct(Product $product): array
+    {
+        if (!$this->config->isEnabled()) {
+            return [];
+        }
+
+        $categoryIds = $product->getCategoryIds();
+
+        if (empty($categoryIds)) {
+            return [];
+        }
+
+        // Fetch category X-Robots data via direct SQL query with store scope
+        try {
+            $storeId = (int)$this->storeManager->getStore()->getId();
+        } catch (\Exception $e) {
+            return [];
+        }
+
+        $categoriesData = $this->categoryRobotsRepository->getProductXRobotsDataByCategoryIds($categoryIds, $storeId);
+
+        if (empty($categoriesData)) {
+            return [];
+        }
+
+        // Check each category for product X-Robots settings
+        // Priority: NOINDEX directives take precedence
+        $finalDirectives = null;
+
+        foreach ($categoriesData as $categoryData) {
+            $useMetaForXRobots = $categoryData['use_meta_for_x_robots'];
+            $useCategoryXRobotsForProducts = $categoryData['use_category_x_robots_for_products'];
+
+            // Default values when null
+            $useMetaForXRobots = $useMetaForXRobots === null ? 1 : (int)$useMetaForXRobots;
+            $useCategoryXRobotsForProducts = $useCategoryXRobotsForProducts === null ? 1 : (int)$useCategoryXRobotsForProducts;
+
+            $directives = [];
+
+            if ($useCategoryXRobotsForProducts) {
+                // Use category's X-Robots directives
+                if ($useMetaForXRobots) {
+                    // Use category's meta robots as X-Robots
+                    $directives = $this->parseDirectivesFromValue($categoryData['robots_meta_tag']);
+                } else {
+                    // Use category's explicit X-Robots header
+                    $directives = $this->parseDirectivesFromValue($categoryData['x_robots_header']);
+                }
+            } else {
+                // Use product-specific X-Robots directives
+                $directives = $this->parseDirectivesFromValue($categoryData['product_x_robots_header']);
+            }
+
+            if (empty($directives)) {
+                continue;
+            }
+
+            // If we found NOINDEX directive, use it immediately (highest priority)
+            if (in_array('noindex', $directives)) {
+                return $directives;
+            }
+
+            // Store the first non-NOINDEX directives we find
+            if ($finalDirectives === null) {
+                $finalDirectives = $directives;
+            }
+        }
+
+        return $finalDirectives ?? [];
     }
 }

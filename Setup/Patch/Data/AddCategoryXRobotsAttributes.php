@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright (c) 2025. All rights reserved.
+ * Copyright (c) 2026. All rights reserved.
  * @author: Volodymyr Hryvinskyi <mailto:volodymyr@hryvinskyi.com>
  */
 
@@ -9,7 +9,6 @@ declare(strict_types=1);
 namespace Hryvinskyi\SeoRobotsCategory\Setup\Patch\Data;
 
 use Hryvinskyi\SeoRobotsCategoryApi\Api\ConfigInterface;
-use Hryvinskyi\SeoRobotsApi\Api\RobotsListInterface;
 use Magento\Catalog\Model\Category;
 use Magento\Eav\Model\Entity\Attribute\ScopedAttributeInterface;
 use Magento\Eav\Setup\EavSetup;
@@ -17,7 +16,7 @@ use Magento\Eav\Setup\EavSetupFactory;
 use Magento\Framework\Setup\ModuleDataSetupInterface;
 use Magento\Framework\Setup\Patch\DataPatchInterface;
 
-class AddCategoryRobotsAttribute implements DataPatchInterface
+class AddCategoryXRobotsAttributes implements DataPatchInterface
 {
     /**
      * @var ModuleDataSetupInterface
@@ -30,7 +29,7 @@ class AddCategoryRobotsAttribute implements DataPatchInterface
     private $eavSetupFactory;
 
     /**
-     * AddCategoryRobotsAttribute constructor.
+     * AddCategoryXRobotsAttributes constructor.
      *
      * @param ModuleDataSetupInterface $moduleDataSetup
      * @param EavSetupFactory $eavSetupFactory
@@ -51,85 +50,106 @@ class AddCategoryRobotsAttribute implements DataPatchInterface
         /** @var EavSetup $eavSetup */
         $eavSetup = $this->eavSetupFactory->create(['setup' => $this->moduleDataSetup]);
 
-        // 1. Robots Meta Tag for Category Page
+        // 1. X-Robots-Tag Header Directives for Category
         $eavSetup->addAttribute(
             Category::ENTITY,
-            ConfigInterface::CATEGORY_ATTRIBUTE_CODE,
+            ConfigInterface::X_ROBOTS_HEADER_ATTRIBUTE_CODE,
             [
-                'type' => 'int',
-                'label' => 'Robots Meta Tag',
-                'input' => 'select',
-                'source' => \Hryvinskyi\SeoRobotsCategory\Model\Category\Attribute\Source\RobotsMetaTag::class,
+                'type' => 'text',
+                'label' => 'X-Robots-Tag Header Directives',
+                'input' => 'multiselect',
+                'backend' => \Hryvinskyi\SeoRobotsCategory\Model\Category\Attribute\Backend\RobotsDirective::class,
                 'required' => false,
-                'sort_order' => 100,
-                'global' => ScopedAttributeInterface::SCOPE_STORE,
-                'group' => 'Search Engine Optimization',
-                'is_used_in_grid' => true,
-                'is_visible_in_grid' => false,
-                'is_filterable_in_grid' => true,
-                'note' => 'Controls search engine indexing for this category page'
-            ]
-        );
-
-        // 2. Apply Robots to Category Products
-        $eavSetup->addAttribute(
-            Category::ENTITY,
-            ConfigInterface::APPLY_ROBOTS_TO_PRODUCTS_ATTRIBUTE_CODE,
-            [
-                'type' => 'int',
-                'label' => 'Apply Robots to Category Products',
-                'input' => 'boolean',
-                'source' => \Magento\Eav\Model\Entity\Attribute\Source\Boolean::class,
-                'required' => false,
-                'default' => '0',
-                'sort_order' => 101,
+                'sort_order' => 110,
                 'global' => ScopedAttributeInterface::SCOPE_STORE,
                 'group' => 'Search Engine Optimization',
                 'is_used_in_grid' => false,
                 'is_visible_in_grid' => false,
                 'is_filterable_in_grid' => false,
-                'note' => 'Enable to apply robots meta tag to all products in this category'
+                'note' => 'X-Robots-Tag HTTP header directives for this category page'
             ]
         );
 
-        // 3. Robots Meta Tag for Category Products
+        // 2. Use Same as Meta Robots Tag toggle
         $eavSetup->addAttribute(
             Category::ENTITY,
-            ConfigInterface::PRODUCT_ROBOTS_ATTRIBUTE_CODE,
+            ConfigInterface::USE_META_FOR_X_ROBOTS_ATTRIBUTE_CODE,
             [
                 'type' => 'int',
-                'label' => 'Robots for Category Products',
-                'input' => 'select',
-                'source' => \Hryvinskyi\SeoRobotsCategory\Model\Category\Attribute\Source\ProductRobotsMetaTag::class,
-                'required' => false,
-                'sort_order' => 102,
-                'global' => ScopedAttributeInterface::SCOPE_STORE,
-                'group' => 'Search Engine Optimization',
-                'is_used_in_grid' => false,
-                'is_visible_in_grid' => false,
-                'is_filterable_in_grid' => false,
-                'note' => 'Robots meta tag for products in this category (only applies if "Apply Robots to Category Products" is enabled)'
-            ]
-        );
-
-        // 4. Use Category Meta Robots for Products toggle
-        $eavSetup->addAttribute(
-            Category::ENTITY,
-            ConfigInterface::USE_CATEGORY_ROBOTS_FOR_PRODUCTS_ATTRIBUTE_CODE,
-            [
-                'type' => 'int',
-                'label' => 'Use Category Meta Robots for Products',
+                'label' => 'Use Same as Meta Robots Tag',
                 'input' => 'boolean',
                 'source' => \Magento\Eav\Model\Entity\Attribute\Source\Boolean::class,
                 'required' => false,
                 'default' => '1',
-                'sort_order' => 103,
+                'sort_order' => 111,
                 'global' => ScopedAttributeInterface::SCOPE_STORE,
                 'group' => 'Search Engine Optimization',
                 'is_used_in_grid' => false,
                 'is_visible_in_grid' => false,
                 'is_filterable_in_grid' => false,
-                'note' => 'When enabled, products will use the category\'s meta robots directives'
+                'note' => 'When enabled, X-Robots-Tag header will use the same directives as meta robots tag'
+            ]
+        );
+
+        // 3. Apply X-Robots-Tag to Category Products
+        $eavSetup->addAttribute(
+            Category::ENTITY,
+            ConfigInterface::APPLY_X_ROBOTS_TO_PRODUCTS_ATTRIBUTE_CODE,
+            [
+                'type' => 'int',
+                'label' => 'Apply X-Robots-Tag to Category Products',
+                'input' => 'boolean',
+                'source' => \Magento\Eav\Model\Entity\Attribute\Source\Boolean::class,
+                'required' => false,
+                'default' => '0',
+                'sort_order' => 112,
+                'global' => ScopedAttributeInterface::SCOPE_STORE,
+                'group' => 'Search Engine Optimization',
+                'is_used_in_grid' => false,
+                'is_visible_in_grid' => false,
+                'is_filterable_in_grid' => false,
+                'note' => 'Enable to apply X-Robots-Tag header to all products in this category'
+            ]
+        );
+
+        // 4. X-Robots-Tag for Category Products
+        $eavSetup->addAttribute(
+            Category::ENTITY,
+            ConfigInterface::PRODUCT_X_ROBOTS_HEADER_ATTRIBUTE_CODE,
+            [
+                'type' => 'text',
+                'label' => 'X-Robots-Tag for Category Products',
+                'input' => 'multiselect',
+                'backend' => \Hryvinskyi\SeoRobotsCategory\Model\Category\Attribute\Backend\RobotsDirective::class,
+                'required' => false,
+                'sort_order' => 113,
+                'global' => ScopedAttributeInterface::SCOPE_STORE,
+                'group' => 'Search Engine Optimization',
+                'is_used_in_grid' => false,
+                'is_visible_in_grid' => false,
+                'is_filterable_in_grid' => false,
+                'note' => 'X-Robots-Tag HTTP header directives for products in this category'
+            ]
+        );
+
+        // 5. Use Category X-Robots for Products toggle
+        $eavSetup->addAttribute(
+            Category::ENTITY,
+            ConfigInterface::USE_CATEGORY_X_ROBOTS_FOR_PRODUCTS_ATTRIBUTE_CODE,
+            [
+                'type' => 'int',
+                'label' => 'Use Category X-Robots for Products',
+                'input' => 'boolean',
+                'source' => \Magento\Eav\Model\Entity\Attribute\Source\Boolean::class,
+                'required' => false,
+                'default' => '1',
+                'sort_order' => 114,
+                'global' => ScopedAttributeInterface::SCOPE_STORE,
+                'group' => 'Search Engine Optimization',
+                'is_used_in_grid' => false,
+                'is_visible_in_grid' => false,
+                'is_filterable_in_grid' => false,
+                'note' => 'When enabled, products will use the category\'s X-Robots-Tag directives'
             ]
         );
 
@@ -141,7 +161,7 @@ class AddCategoryRobotsAttribute implements DataPatchInterface
      */
     public static function getDependencies()
     {
-        return [];
+        return [AddCategoryRobotsAttribute::class];
     }
 
     /**
